@@ -26,6 +26,9 @@ use tracing::{debug, info, warn};
 const SYSTEM_PROFILE: &str = "/nix/var/nix/profiles/system";
 const CURRENT_PROFILE: &str = "/run/current-system";
 
+
+const SPEC_LOCATION: &str = "/etc/specialisation";
+
 impl DarwinArgs {
   /// Run the `darwin` subcommand.
   ///
@@ -90,7 +93,7 @@ impl DarwinRebuildArgs {
         (dir.as_ref().join("result"), Some(dir))
       };
 
-    debug!("Output path: {out_path:?}");
+        debug!("Output path: {out_path:?}");
 
     let installable = self
       .common
@@ -158,6 +161,26 @@ impl DarwinRebuildArgs {
     let target_profile = out_path.clone();
 
     target_profile.try_exists().context("Doesn't exist")?;
+  let current_specialisation = std::fs::read_to_string(SPEC_LOCATION)
+      .ok()
+      .map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
+
+
+    let target_specialisation = if self.no_specialisation {
+      None
+    } else {
+      self.specialisation.or(current_specialisation)
+    };
+
+    let target_profile = if let Some(ref specialisation) = target_specialisation {
+      target_profile.join("specialisation").join(specialisation)
+    } else {
+      target_profile.clone()
+    };
+
+    debug!("target_specialisation: {target_specialisation:?}");
+
+  
 
     debug!(
       "Comparing with target profile: {}",
@@ -200,8 +223,10 @@ impl DarwinRebuildArgs {
         .run()
         .wrap_err("Failed to set Darwin system profile")?;
 
-      let activate = out_path.join("activate");
-      let activate_user = out_path.join("activate-user");
+      let activate = target_profile.join("activate");
+      let activate_user = target_profile.join("activate-user");
+
+      debug!("Activation path: {}", activate.display());
 
       // Determine if we need to elevate privileges
       let needs_elevation = !activate_user

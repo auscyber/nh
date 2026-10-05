@@ -1,10 +1,14 @@
 {
-  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
+  inputs = {
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
 
+    crane.url = "github:ipetkov/crane";
+  };
   outputs =
     {
       self,
       nixpkgs,
+      crane,...
     }:
     let
       inherit (nixpkgs) lib;
@@ -24,10 +28,18 @@
       rev = self.shortRev or self.dirtyShortRev or "dirty";
     in
     {
-      overlays.default = final: _: { nh = final.callPackage ./package.nix { inherit rev; }; };
+      overlays.default = final: _: {
+        nh = final.callPackage ./package.nix {
+          inherit crane rev;
+          pkgs = final;
+        };
+      };
 
       packages = forAllSystems (pkgs: {
-        nh = pkgs.callPackage ./package.nix { inherit rev; };
+        nh = pkgs.callPackage ./package.nix {
+          inherit crane rev;
+          pkgs = pkgs;
+        };
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.nh;
       });
 
